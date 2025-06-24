@@ -9,6 +9,8 @@ abstract class Routes {
   static const LEAVE_REQUEST = _Paths.LEAVE_REQUEST;
   static const PROFILE = _Paths.PROFILE;
   static const BOTTOM_NAV_BAR = _Paths.BOTTOM_NAV_BAR;
+  static const SCHEDULE = _Paths.SCHEDULE;
+  static const SPLASH = _Paths.SPLASH;
 }
 
 abstract class _Paths {
@@ -19,4 +21,6 @@ abstract class _Paths {
   static const LEAVE_REQUEST = '/leave-request';
   static const PROFILE = '/profile';
   static const BOTTOM_NAV_BAR = '/bottom-nav-bar';
+  static const SCHEDULE = '/schedule';
+  static const SPLASH = '/splash';
 }

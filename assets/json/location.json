@@ -1,0 +1,46 @@
+{
+    "office_location": {
+        "name": "Kantor Pusat",
+        "address": "Jl. Raya Kantor No. 123, Malang, Jawa Timur",
+        "latitude": -8.1868917,
+        "longitude": 113.8001281,
+        "radius_meters": 800,
+        "description": "Area radius 800 meter dari kantor pusat"
+    },
+    "branch_locations": [
+        {
+            "id": 1,
+            "name": "Kantor Cabang Malang Kota",
+            "address": "Jl. Ijen No. 456, Malang Kota",
+            "latitude": -7.9666,
+            "longitude": 112.6326,
+            "radius_meters": 500,
+            "description": "Area radius 500 meter dari kantor cabang Malang Kota"
+        },
+        {
+            "id": 2,
+            "name": "Kantor Cabang Banyuwangi",
+            "address": "Jl. Ahmad Yani No. 789, Banyuwangi",
+            "latitude": -8.2191,
+            "longitude": 114.3691,
+            "radius_meters": 600,
+            "description": "Area radius 600 meter dari kantor cabang Banyuwangi"
+        }
+    ],
+    "settings": {
+        "enable_location_validation": true,
+        "default_radius_meters": 800,
+        "allow_manual_location": false,
+        "strict_mode": true,
+        "auto_tracking_enabled": true,
+        "location_update_interval_seconds": 15,
+        "accuracy_threshold_meters": 50,
+        "notification_message": {
+            "outside_area": "Anda berada di luar area kantor. Silakan mendekat ke lokasi kantor untuk melakukan absensi.",
+            "location_not_found": "Tidak dapat mendeteksi lokasi Anda. Pastikan GPS aktif dan izin lokasi telah diberikan.",
+            "validation_disabled": "Validasi lokasi sedang dinonaktifkan untuk maintenance.",
+            "auto_tracking_active": "Sistem sedang melacak lokasi Anda secara otomatis.",
+            "gps_accuracy_low": "Akurasi GPS rendah. Sistem akan terus mencoba mendapatkan sinyal yang lebih baik."
+        }
+    }
+}

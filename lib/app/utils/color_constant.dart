@@ -1,5 +1,3 @@
-// File: lib/app/utils/color_constant.dart
-
 import 'package:flutter/material.dart';
 
 class AppColors {

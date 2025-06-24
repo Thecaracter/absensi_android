@@ -20,22 +20,22 @@ class BottomNavBarController extends GetxController {
     switch (index) {
       case 0:
         if (Get.isRegistered<HomeController>()) {
-          // Get.find<HomeController>().refreshData();
+          Get.find<HomeController>();
         }
         break;
       case 1:
         if (Get.isRegistered<AttendanceController>()) {
-          // Get.find<AttendanceController>().refreshData();
+          Get.find<AttendanceController>();
         }
         break;
       case 2:
         if (Get.isRegistered<LeaveRequestController>()) {
-          // Get.find<LeaveRequestController>().refreshData();
+          Get.find<LeaveRequestController>();
         }
         break;
       case 3:
         if (Get.isRegistered<ProfileController>()) {
-          // Get.find<ProfileController>().refreshData();
+          Get.find<ProfileController>();
         }
         break;
     }

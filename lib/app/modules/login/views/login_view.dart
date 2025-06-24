@@ -321,33 +321,12 @@ class LoginView extends GetView<LoginController> {
                       const SizedBox(height: 24),
 
                       // Forgot Password with modern styling
-                      TextButton(
-                        onPressed: () {
-                          // Handle forgot password
-                        },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                        ),
-                        child: Text(
-                          'Lupa Password?',
-                          style: TextStyle(
-                            color: themeController.isDarkMode.value
-                                ? AppColors.textSecondary
-                                : AppColors.textSecondaryLight,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
 
                       const SizedBox(height: 32),
 
                       // Footer text
                       Text(
-                        '© 2024 Sistem Presensi',
+                        '© 2025 Sistem Presensi',
                         style: TextStyle(
                           color: themeController.isDarkMode.value
                               ? AppColors.textMuted
