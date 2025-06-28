@@ -1,4 +1,5 @@
 // File: lib/app/modules/attendance/controllers/attendance_controller.dart
+// COMPLETE VERSION - Fixed Location JSON + Front Camera + No Fallback
 
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
@@ -44,9 +45,12 @@ class AttendanceController extends GetxController {
   StreamSubscription<Position>? _positionStream;
   var isAutoTrackingActive = false.obs;
 
-  // Camera variables
+  // ENHANCED Camera variables
   CameraController? cameraController;
   List<CameraDescription>? cameras;
+  var currentCameraIndex = 0.obs;
+  var isFrontCamera = false.obs;
+  var cameraError = ''.obs;
 
   @override
   void onInit() {
@@ -69,7 +73,7 @@ class AttendanceController extends GetxController {
     super.onClose();
   }
 
-  // Initialize camera - WITH DEBUG
+  // FIXED: Initialize camera with FRONT camera priority
   Future<void> initializeCamera() async {
     try {
       print('🔥 CAMERA: Initializing camera...');
@@ -77,26 +81,140 @@ class AttendanceController extends GetxController {
 
       if (cameras == null || cameras!.isEmpty) {
         print('🔥 CAMERA: ❌ No cameras available');
-        Get.snackbar(
-            'Error', 'Tidak ada kamera yang tersedia di perangkat ini');
+        cameraError.value = 'Tidak ada kamera yang tersedia di perangkat ini';
+        Get.snackbar('Error', cameraError.value);
         return;
       }
 
       print('🔥 CAMERA: Found ${cameras!.length} cameras');
 
+      // Log all available cameras
+      for (int i = 0; i < cameras!.length; i++) {
+        print(
+            '🔥 CAMERA: Camera $i: ${cameras![i].lensDirection} (${cameras![i].name})');
+      }
+
+      // PRIORITY: Find FRONT camera first (for selfie attendance)
+      int frontCameraIndex = -1;
+      int backCameraIndex = -1;
+
+      for (int i = 0; i < cameras!.length; i++) {
+        if (cameras![i].lensDirection == CameraLensDirection.front) {
+          frontCameraIndex = i;
+          print('🔥 CAMERA: ✅ Front camera found at index $i');
+        } else if (cameras![i].lensDirection == CameraLensDirection.back) {
+          backCameraIndex = i;
+          print('🔥 CAMERA: ✅ Back camera found at index $i');
+        }
+      }
+
+      // Use front camera if available, otherwise back camera
+      if (frontCameraIndex != -1) {
+        currentCameraIndex.value = frontCameraIndex;
+        isFrontCamera.value = true;
+        print(
+            '🔥 CAMERA: Using FRONT camera (index $frontCameraIndex) for selfie');
+      } else if (backCameraIndex != -1) {
+        currentCameraIndex.value = backCameraIndex;
+        isFrontCamera.value = false;
+        print(
+            '🔥 CAMERA: Front camera not found, using BACK camera (index $backCameraIndex)');
+      } else {
+        currentCameraIndex.value = 0;
+        isFrontCamera.value =
+            cameras![0].lensDirection == CameraLensDirection.front;
+        print('🔥 CAMERA: Using default camera (index 0)');
+      }
+
       cameraController = CameraController(
-        cameras![0], // Use first camera (usually back camera)
+        cameras![currentCameraIndex.value],
         ResolutionPreset.medium,
         enableAudio: false,
       );
 
       await cameraController!.initialize();
       isCameraInitialized.value = true;
+      cameraError.value = '';
+
       print('🔥 CAMERA: ✅ Camera initialized successfully');
+      print(
+          '🔥 CAMERA: Current camera: ${isFrontCamera.value ? "FRONT" : "BACK"}');
     } catch (e) {
       print('🔥 CAMERA: ❌ Error initializing camera: $e');
-      Get.snackbar('Error', 'Gagal menginisialisasi kamera: $e');
+      cameraError.value = 'Gagal menginisialisasi kamera: $e';
+      Get.snackbar('Error', cameraError.value);
       isCameraInitialized.value = false;
+    }
+  }
+
+  // ENHANCED: Switch between front and back camera
+  Future<void> switchCamera() async {
+    if (cameras == null || cameras!.length < 2) {
+      print('🔥 CAMERA: ❌ Cannot switch - not enough cameras');
+      Get.snackbar('Info', 'Hanya ada satu kamera di perangkat ini');
+      return;
+    }
+
+    try {
+      print('🔥 CAMERA: Switching camera...');
+
+      // Dispose current camera
+      await cameraController?.dispose();
+
+      // Find next camera (prioritize switching between front/back)
+      int newCameraIndex = currentCameraIndex.value;
+
+      if (isFrontCamera.value) {
+        // Currently front, switch to back
+        for (int i = 0; i < cameras!.length; i++) {
+          if (cameras![i].lensDirection == CameraLensDirection.back) {
+            newCameraIndex = i;
+            break;
+          }
+        }
+      } else {
+        // Currently back, switch to front
+        for (int i = 0; i < cameras!.length; i++) {
+          if (cameras![i].lensDirection == CameraLensDirection.front) {
+            newCameraIndex = i;
+            break;
+          }
+        }
+      }
+
+      currentCameraIndex.value = newCameraIndex;
+      isFrontCamera.value =
+          cameras![newCameraIndex].lensDirection == CameraLensDirection.front;
+
+      // Initialize new camera
+      cameraController = CameraController(
+        cameras![newCameraIndex],
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+
+      await cameraController!.initialize();
+
+      print(
+          '🔥 CAMERA: ✅ Switched to ${isFrontCamera.value ? "FRONT" : "BACK"} camera');
+
+      Get.snackbar(
+        'Kamera Beralih',
+        'Menggunakan kamera ${isFrontCamera.value ? "depan" : "belakang"}',
+        backgroundColor: Colors.blue,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      print('🔥 CAMERA: ❌ Error switching camera: $e');
+      Get.snackbar('Error', 'Gagal beralih kamera: $e');
+
+      // Try to reinitialize original camera
+      try {
+        await initializeCamera();
+      } catch (reinitError) {
+        print('🔥 CAMERA: ❌ Error reinitializing camera: $reinitError');
+      }
     }
   }
 
@@ -107,7 +225,7 @@ class AttendanceController extends GetxController {
     isCameraInitialized.value = false;
   }
 
-  // Force start location tracking - CLEAN VERSION
+  // Force start location tracking
   Future<void> forceStartLocationTracking() async {
     try {
       isAutoTrackingActive.value = true;
@@ -193,7 +311,7 @@ class AttendanceController extends GetxController {
     _positionStream = null;
   }
 
-  // Update location data from position - CLEAN
+  // Update location data from position
   void _updateLocationData(Position position) {
     currentPosition.value = position;
     currentLatitude.value = position.latitude;
@@ -296,44 +414,18 @@ class AttendanceController extends GetxController {
     return prefs.getString('auth_token');
   }
 
-  // Load location configuration from JSON - FIXED
+  // FIXED: Load location configuration - NO FALLBACK VERSION
+  // FIXED: Update path ke assets/json/location.json
+
   Future<void> loadLocationConfig() async {
     try {
       print('🔥 LOCATION: Loading location config...');
-      String jsonString;
 
-      // Try to load from assets PROPERLY
-      try {
-        jsonString =
-            await rootBundle.loadString('assets/data/json/location.json');
-        print('🔥 LOCATION: ✅ Config loaded from assets successfully');
-      } catch (e) {
-        print('🔥 LOCATION: ❌ Failed to load from assets: $e');
-        print('🔥 LOCATION: Using fallback config...');
-
-        // Only use fallback if really can't load from assets
-        jsonString = '''{
-          "office_location": {
-            "name": "Kantor Pusat",
-            "address": "Jl. Raya Kantor No. 123, Malang, Jawa Timur", 
-            "latitude": -8.1868917,
-            "longitude": 113.8001281,
-            "radius_meters": 800,
-            "description": "Area radius 800 meter dari kantor pusat"
-          },
-          "branch_locations": [],
-          "settings": {
-            "enable_location_validation": true,
-            "default_radius_meters": 800,
-            "allow_manual_location": false,
-            "strict_mode": true,
-            "notification_message": {
-              "outside_area": "Anda berada di luar area kantor",
-              "location_not_found": "Tidak dapat mendeteksi lokasi"
-            }
-          }
-        }''';
-      }
+      // PATH YANG BENAR sesuai lokasi file Anda
+      final String jsonString =
+          await rootBundle.loadString('assets/json/location.json');
+      print(
+          '🔥 LOCATION: ✅ Successfully loaded from assets/json/location.json');
 
       final Map<String, dynamic> jsonData = json.decode(jsonString);
       locationConfig.value = LocationConfigModel.fromJson(jsonData);
@@ -342,11 +434,45 @@ class AttendanceController extends GetxController {
       print(
           '🔥 LOCATION: Office: ${locationConfig.value!.officeLocation.name}');
       print(
+          '🔥 LOCATION: Office Coordinates: ${locationConfig.value!.officeLocation.latitude}, ${locationConfig.value!.officeLocation.longitude}');
+      print(
           '🔥 LOCATION: Branches: ${locationConfig.value!.branchLocations.length}');
+
+      // Log semua koordinat branch
+      for (var branch in locationConfig.value!.branchLocations) {
+        print(
+            '🔥 LOCATION: Branch ${branch.name}: ${branch.latitude}, ${branch.longitude}');
+      }
 
       validateCurrentLocation();
     } catch (e) {
-      print('🔥 LOCATION: ❌ Error loading config: $e');
+      print('🔥 LOCATION: ❌ FATAL ERROR - Cannot load location.json: $e');
+      print('🔥 LOCATION: ❌ Path: assets/json/location.json');
+      print(
+          '🔥 LOCATION: ❌ Check if file exists and pubspec.yaml includes assets/json/');
+
+      // Show error dialog
+      Get.dialog(
+        AlertDialog(
+          title: Text('FATAL ERROR'),
+          content: Text('Cannot load location.json!\n\n'
+              'Error: $e\n\n'
+              'Make sure:\n'
+              '1. File exists at assets/json/location.json\n'
+              '2. pubspec.yaml includes assets/json/\n'
+              '3. Run flutter clean && flutter pub get'),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+        barrierDismissible: false,
+      );
+
+      // RE-THROW ERROR
+      rethrow;
     }
   }
 
@@ -370,7 +496,7 @@ class AttendanceController extends GetxController {
     return earthRadius * c;
   }
 
-  // Validate current location using real GPS - CLEAN
+  // Validate current location using real GPS
   void validateCurrentLocation() {
     if (locationConfig.value == null) {
       isLocationValid.value = false;
@@ -475,22 +601,11 @@ class AttendanceController extends GetxController {
     }
   }
 
-  // Get all office locations - FIXED
+  // Get all office locations
   List<Map<String, dynamic>> getAllOfficeLocations() {
     if (locationConfig.value == null) {
-      print('🔥 LOCATION: ❌ locationConfig is null, returning default');
-      return [
-        {
-          'type': 'office',
-          'id': 0,
-          'name': 'Kantor Pusat (Default)',
-          'address': 'Default location - config not loaded',
-          'latitude': -8.1868917,
-          'longitude': 113.8001281,
-          'radius': 800,
-          'description': 'Default fallback location',
-        }
-      ];
+      print('🔥 LOCATION: ❌ locationConfig is null');
+      return [];
     }
 
     print(
@@ -501,6 +616,11 @@ class AttendanceController extends GetxController {
   // Show office locations dialog
   void showOfficeLocationsDialog() {
     final offices = getAllOfficeLocations();
+
+    if (offices.isEmpty) {
+      Get.snackbar('Error', 'Data lokasi kantor tidak tersedia');
+      return;
+    }
 
     Get.dialog(
       AlertDialog(
@@ -549,7 +669,7 @@ class AttendanceController extends GetxController {
     );
   }
 
-  // ENHANCED: Get today's attendance data with robust error handling
+  // Get today's attendance data with robust error handling
   Future<void> getTodayAttendance() async {
     try {
       print('🔥 SHIFT: ===== STARTING getTodayAttendance =====');
@@ -780,9 +900,10 @@ class AttendanceController extends GetxController {
     }
   }
 
-  // Take photo with camera - WITH DEBUG
+  // ENHANCED: Take photo with camera
   Future<void> takePhoto() async {
-    print('🔥 CAMERA: Taking photo...');
+    print(
+        '🔥 CAMERA: Taking photo with ${isFrontCamera.value ? "FRONT" : "BACK"} camera...');
 
     if (!isCameraInitialized.value || cameraController == null) {
       print('🔥 CAMERA: ❌ Camera not ready');
@@ -798,16 +919,23 @@ class AttendanceController extends GetxController {
       print('🔥 CAMERA: ✅ Photo captured successfully');
       print('🔥 CAMERA: Photo path: ${photo.path}');
       print('🔥 CAMERA: File size: ${await File(photo.path).length()} bytes');
+      print(
+          '🔥 CAMERA: Camera used: ${isFrontCamera.value ? "FRONT" : "BACK"}');
 
       Get.back(); // Close camera view
-      Get.snackbar('Berhasil', 'Foto berhasil diambil');
+      Get.snackbar(
+        'Berhasil',
+        'Foto berhasil diambil dengan kamera ${isFrontCamera.value ? "depan" : "belakang"}',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
     } catch (e) {
       print('🔥 CAMERA: ❌ Error taking photo: $e');
       Get.snackbar('Error', 'Gagal mengambil foto: $e');
     }
   }
 
-  // Pick image from gallery using file_picker - WITH DEBUG
+  // Pick image from gallery using file_picker
   Future<void> pickImageFromGallery() async {
     try {
       print('🔥 CAMERA: Opening gallery...');
@@ -824,7 +952,7 @@ class AttendanceController extends GetxController {
         print('🔥 CAMERA: Image path: ${result.files.single.path}');
         print('🔥 CAMERA: File size: ${result.files.single.size} bytes');
 
-        Get.snackbar('Berhasil', 'Foto berhasil dipilih');
+        Get.snackbar('Berhasil', 'Foto berhasil dipilih dari galeri');
       } else {
         print('🔥 CAMERA: ❌ No image selected');
       }
@@ -834,7 +962,7 @@ class AttendanceController extends GetxController {
     }
   }
 
-  // Show camera view - WITH DEBUG
+  // ENHANCED: Show camera view with switch camera button
   void showCameraView() {
     print('🔥 CAMERA: Showing camera view...');
 
@@ -851,9 +979,61 @@ class AttendanceController extends GetxController {
           width: Get.width * 0.9,
           child: Column(
             children: [
+              // Camera preview with overlay info
               Expanded(
-                child: CameraPreview(cameraController!),
+                child: Stack(
+                  children: [
+                    CameraPreview(cameraController!),
+
+                    // Camera info overlay
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          isFrontCamera.value
+                              ? '📱 Kamera Depan'
+                              : '📷 Kamera Belakang',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Switch camera button (if multiple cameras available)
+                    if (cameras != null && cameras!.length > 1)
+                      Positioned(
+                        top: 16,
+                        right: 16,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            onPressed: switchCamera,
+                            icon: const Icon(
+                              Icons.flip_camera_ios,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
+
+              // Action buttons
               Container(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -867,13 +1047,16 @@ class AttendanceController extends GetxController {
                       child: const Text('Batal'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.grey,
+                        foregroundColor: Colors.white,
                       ),
                     ),
                     ElevatedButton(
                       onPressed: takePhoto,
-                      child: const Text('Ambil Foto'),
+                      child:
+                          Text(isFrontCamera.value ? 'Selfie' : 'Ambil Foto'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
                       ),
                     ),
                   ],
@@ -886,7 +1069,7 @@ class AttendanceController extends GetxController {
     );
   }
 
-  // Check In with Real GPS Validation - WITH DETAILED DEBUG
+  // Check In with Real GPS Validation
   Future<void> checkIn() async {
     print('🔥 CHECK-IN: ===== STARTING CHECK IN =====');
     print('🔥 CHECK-IN: Attendance data: ${attendanceData.value}');
@@ -1036,7 +1219,7 @@ class AttendanceController extends GetxController {
     }
   }
 
-  // Check Out with Real GPS Validation - WITH DETAILED DEBUG
+  // Check Out with Real GPS Validation
   Future<void> checkOut() async {
     print('🔥 CHECK-OUT: ===== STARTING CHECK OUT =====');
 
@@ -1170,7 +1353,7 @@ class AttendanceController extends GetxController {
     }
   }
 
-  // Show image picker dialog - WITH DEBUG
+  // Show image picker dialog
   void showImagePickerDialog() {
     print('🔥 CAMERA: Showing image picker dialog...');
 
@@ -1181,8 +1364,15 @@ class AttendanceController extends GetxController {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Kamera'),
+              leading: Icon(
+                isFrontCamera.value ? Icons.camera_front : Icons.camera_alt,
+                color: Colors.blue,
+              ),
+              title: Text(
+                  isFrontCamera.value ? 'Kamera Depan (Selfie)' : 'Kamera'),
+              subtitle: Text(cameras != null && cameras!.length > 1
+                  ? 'Tap untuk ganti kamera'
+                  : 'Ambil foto dengan kamera'),
               onTap: () {
                 print('🔥 CAMERA: Camera option selected');
                 Get.back();
@@ -1190,8 +1380,9 @@ class AttendanceController extends GetxController {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library),
+              leading: const Icon(Icons.photo_library, color: Colors.green),
               title: const Text('Galeri'),
+              subtitle: const Text('Pilih dari galeri foto'),
               onTap: () {
                 print('🔥 CAMERA: Gallery option selected');
                 Get.back();
@@ -1464,5 +1655,29 @@ class AttendanceController extends GetxController {
         isAutoTrackingActive.value;
 
     return ready;
+  }
+
+  // ENHANCED: Get camera info text for UI
+  String get cameraInfoText {
+    if (!isCameraInitialized.value) {
+      return 'Kamera belum siap';
+    }
+
+    if (cameraError.value.isNotEmpty) {
+      return 'Error: ${cameraError.value}';
+    }
+
+    final cameraType = isFrontCamera.value ? 'Depan (Selfie)' : 'Belakang';
+    final switchAvailable = cameras != null && cameras!.length > 1;
+
+    return 'Kamera $cameraType${switchAvailable ? ' • Tap untuk ganti' : ''}';
+  }
+
+  // ENHANCED: Get camera status color
+  Color get cameraStatusColor {
+    if (!isCameraInitialized.value || cameraError.value.isNotEmpty) {
+      return Colors.red;
+    }
+    return isFrontCamera.value ? Colors.blue : Colors.green;
   }
 }
