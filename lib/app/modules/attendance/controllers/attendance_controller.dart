@@ -1,6 +1,3 @@
-// File: lib/app/modules/attendance/controllers/attendance_controller.dart
-// COMPLETE VERSION - Fixed Location JSON + Front Camera + No Fallback
-
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
