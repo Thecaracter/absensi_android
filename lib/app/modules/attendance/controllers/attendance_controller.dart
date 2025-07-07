@@ -411,66 +411,126 @@ class AttendanceController extends GetxController {
     return prefs.getString('auth_token');
   }
 
-  // FIXED: Load location configuration - NO FALLBACK VERSION
-  // FIXED: Update path ke assets/json/location.json
-
   Future<void> loadLocationConfig() async {
     try {
-      print('🔥 LOCATION: Loading location config...');
+      print('🔥 LOCATION: Loading location config from API...');
 
-      // PATH YANG BENAR sesuai lokasi file Anda
-      final String jsonString =
-          await rootBundle.loadString('assets/json/location.json');
-      print(
-          '🔥 LOCATION: ✅ Successfully loaded from assets/json/location.json');
-
-      final Map<String, dynamic> jsonData = json.decode(jsonString);
-      locationConfig.value = LocationConfigModel.fromJson(jsonData);
-
-      print('🔥 LOCATION: ✅ Config parsed successfully');
-      print(
-          '🔥 LOCATION: Office: ${locationConfig.value!.officeLocation.name}');
-      print(
-          '🔥 LOCATION: Office Coordinates: ${locationConfig.value!.officeLocation.latitude}, ${locationConfig.value!.officeLocation.longitude}');
-      print(
-          '🔥 LOCATION: Branches: ${locationConfig.value!.branchLocations.length}');
-
-      // Log semua koordinat branch
-      for (var branch in locationConfig.value!.branchLocations) {
-        print(
-            '🔥 LOCATION: Branch ${branch.name}: ${branch.latitude}, ${branch.longitude}');
+      final token = await _getToken();
+      if (token == null) {
+        print('🔥 LOCATION: ❌ No token found');
+        _showLocationError('Token tidak ditemukan. Silakan login ulang.');
+        return;
       }
 
-      validateCurrentLocation();
-    } catch (e) {
-      print('🔥 LOCATION: ❌ FATAL ERROR - Cannot load location.json: $e');
-      print('🔥 LOCATION: ❌ Path: assets/json/location.json');
-      print(
-          '🔥 LOCATION: ❌ Check if file exists and pubspec.yaml includes assets/json/');
+      // TAMBAHKAN CACHE BUSTING - SAMA SEPERTI getTodayAttendance()
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final randomParam = DateTime.now().microsecond;
+      final url =
+          '${ApiConstant.apiBaseUrl}/location/config?_t=$timestamp&_r=$randomParam&_cache=false';
 
-      // Show error dialog
-      Get.dialog(
-        AlertDialog(
-          title: Text('FATAL ERROR'),
-          content: Text('Cannot load location.json!\n\n'
-              'Error: $e\n\n'
-              'Make sure:\n'
-              '1. File exists at assets/json/location.json\n'
-              '2. pubspec.yaml includes assets/json/\n'
-              '3. Run flutter clean && flutter pub get'),
-          actions: [
-            TextButton(
-              onPressed: () => Get.back(),
-              child: Text('OK'),
-            ),
-          ],
-        ),
-        barrierDismissible: false,
+      print('🔥 LOCATION: Calling API with cache busting: $url');
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          // TAMBAHKAN CACHE HEADERS YANG SAMA
+          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'If-Modified-Since': 'Mon, 26 Jul 1997 05:00:00 GMT',
+          'If-None-Match': '*',
+        },
       );
 
-      // RE-THROW ERROR
-      rethrow;
+      print('🔥 LOCATION: API Response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        print('🔥 LOCATION: ✅ Successfully loaded from API');
+        print('🔥 LOCATION: Success flag: ${jsonResponse['success']}');
+
+        if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
+          // CLEAR OLD CONFIG FIRST
+          locationConfig.value = null;
+
+          locationConfig.value =
+              LocationConfigModel.fromJson(jsonResponse['data']);
+
+          print('🔥 LOCATION: ✅ Config parsed successfully');
+          print(
+              '🔥 LOCATION: Office: ${locationConfig.value!.officeLocation.name}');
+          print(
+              '🔥 LOCATION: Office Coordinates: ${locationConfig.value!.officeLocation.latitude}, ${locationConfig.value!.officeLocation.longitude}');
+          print(
+              '🔥 LOCATION: Branches: ${locationConfig.value!.branchLocations.length}');
+
+          // Log semua koordinat branch
+          for (var branch in locationConfig.value!.branchLocations) {
+            print(
+                '🔥 LOCATION: Branch ${branch.name}: ${branch.latitude}, ${branch.longitude}');
+          }
+
+          // IMMEDIATE VALIDATION AFTER LOADING NEW CONFIG
+          validateCurrentLocation();
+
+          print('🔥 LOCATION: ✅ Location config refreshed successfully');
+        } else {
+          print('🔥 LOCATION: ❌ API returned invalid data');
+          _showLocationError('Data lokasi tidak valid dari server.');
+        }
+      } else if (response.statusCode == 401) {
+        print('🔥 LOCATION: ❌ Unauthorized');
+        _showLocationError('Session expired. Silakan login ulang.');
+      } else {
+        print('🔥 LOCATION: ❌ API Error ${response.statusCode}');
+        print('🔥 LOCATION: Response body: ${response.body}');
+        _showLocationError(
+            'Gagal memuat konfigurasi lokasi. Server error (${response.statusCode}).');
+      }
+    } catch (e) {
+      print('🔥 LOCATION: ❌ Exception loading from API: $e');
+      _showLocationError(
+          'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.');
     }
+  }
+
+  void _showLocationError(String message) {
+    locationError.value = message;
+
+    Get.snackbar(
+      'Error Konfigurasi Lokasi',
+      message,
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 5),
+      isDismissible: true,
+    );
+
+    // Also show blocking dialog for critical errors
+    Get.dialog(
+      AlertDialog(
+        title: const Text('❌ Error Konfigurasi Lokasi'),
+        content: Text(
+            '$message\n\nAplikasi tidak dapat memuat data lokasi kantor. Hubungi admin atau coba lagi nanti.'),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('OK'),
+          ),
+          TextButton(
+            onPressed: () {
+              Get.back();
+              loadLocationConfig();
+            },
+            child: const Text('Coba Lagi'),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
   }
 
   // Calculate distance between two points using Haversine formula
@@ -883,6 +943,7 @@ class AttendanceController extends GetxController {
           duration: const Duration(seconds: 3),
         );
       }
+      loadLocationConfig();
     } catch (e) {
       print('🔥 FORCE REFRESH: Final error: $e');
       Get.snackbar(
